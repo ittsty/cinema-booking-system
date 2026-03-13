@@ -1,10 +1,16 @@
 package main
 
 import (
+	"cinema-booking/internal/seat"
+	"cinema-booking/pkg/mongo"
+	"cinema-booking/pkg/redis"
+
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	mongo.Connect()
+	redis.Connect()
 
 	router := gin.Default()
 
@@ -13,6 +19,6 @@ func main() {
 			"status": "ok",
 		})
 	})
-
+	router.GET("/showtimes/:id/seats", seat.GetSeatMap)
 	router.Run(":8080")
 }
