@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cinema-booking/internal/audit"
 	"cinema-booking/internal/booking"
 	"cinema-booking/internal/seat"
 	"cinema-booking/internal/ws"
@@ -17,6 +18,8 @@ func main() {
 	hub := ws.NewHub()
 	go hub.Run()
 
+	booking.StartTimeoutWorker(hub)
+
 	router := gin.Default()
 	router.GET("/ws", func(c *gin.Context) {
 		ws.ServeWS(hub, c)
@@ -32,5 +35,6 @@ func main() {
 	router.POST("/booking", booking.CreateBookingHandler)
 	router.POST("/booking/:seat_number/confirm", booking.ConfirmBookingHandler(hub))
 
+	router.GET("/admin/logs", audit.GetLogsHandler)
 	router.Run(":8080")
 }

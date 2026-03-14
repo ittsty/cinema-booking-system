@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"cinema-booking/internal/audit"
 	"cinema-booking/internal/models"
 	"cinema-booking/internal/seat"
 	"cinema-booking/internal/ws"
@@ -28,6 +29,8 @@ func CreateBookingHandler(c *gin.Context) {
 	var req BookingRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = audit.LogEvent("SYSTEM_ERROR", req.UserID, req.SeatNumber, req.ShowtimeID, err.Error())
+
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
@@ -44,11 +47,15 @@ func CreateBookingHandler(c *gin.Context) {
 	}
 
 	if err := CreateBooking(booking); err != nil {
+		_ = audit.LogEvent("SYSTEM_ERROR", req.UserID, req.SeatNumber, req.ShowtimeID, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
+
+	_ = seat.UpdateSeatStatus(req.ShowtimeID, req.SeatNumber, "LOCKED")
+	_ = audit.LogEvent("BOOKING_CREATED", req.UserID, req.SeatNumber, req.ShowtimeID, "booking created successfully")
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "booking created",
@@ -63,18 +70,24 @@ func ConfirmBookingHandler(hub *ws.Hub) gin.HandlerFunc {
 
 		var req ConfirmBookingRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
+			_ = audit.LogEvent("SYSTEM_ERROR", "", seatNumber, req.ShowtimeID, err.Error())
+
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
 			})
 			return
 		}
 		if err := ConfirmBooking(seatNumber, req.ShowtimeID); err != nil {
+			_ = audit.LogEvent("SYSTEM_ERROR", "", seatNumber, req.ShowtimeID, err.Error())
+
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})
 			return
 		}
 		if err := seat.UpdateSeatStatus(req.ShowtimeID, seatNumber, "BOOKED"); err != nil {
+			_ = audit.LogEvent("SYSTEM_ERROR", "", seatNumber, req.ShowtimeID, err.Error())
+
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})
@@ -89,6 +102,8 @@ func ConfirmBookingHandler(hub *ws.Hub) gin.HandlerFunc {
 			"seat":"%s"
 		}`, seatNumber)
 		hub.Broadcast <- []byte(msg)
+
+		_ = audit.LogEvent("BOOKING_SUCCESS", "", seatNumber, req.ShowtimeID, "booking confirmed successfully")
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "booking confirmed",
