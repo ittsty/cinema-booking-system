@@ -1,0 +1,83 @@
+# ========================
+# OS
+# ========================
+.DS_Store
+Thumbs.db
+
+# ========================
+# Environment
+# ========================
+.env
+.env.*
+!.env.example
+
+# ========================
+# Logs
+# ========================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========================
+# Go
+# ========================
+bin/
+build/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+
+# Go modules
+vendor/
+
+# ========================
+# Node / Vue
+# ========================
+node_modules/
+.npm
+.pnpm-store
+dist/
+.nuxt/
+.next/
+.vite/
+.cache/
+
+# ========================
+# Editor
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ========================
+# Docker
+# ========================
+docker-data/
+*.pid
+
+# ========================
+# Database / Local data
+# ========================
+mongo-data/
+redis-data/
+
+# ========================
+# Test / Coverage
+# ========================
+coverage/
+*.coverprofile
+
+# ========================
+# Misc
+# ========================
+tmp/
+temp/

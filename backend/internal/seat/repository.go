@@ -6,6 +6,7 @@ import (
 
 	"cinema-booking/internal/models"
 	"cinema-booking/pkg/mongo"
+	"cinema-booking/pkg/redis"
 )
 
 func GetSeats(showtimeID string) ([]models.Seat, error) {
@@ -27,4 +28,20 @@ func GetSeats(showtimeID string) ([]models.Seat, error) {
 	err = cursor.All(ctx, &seats)
 
 	return seats, err
+}
+
+func LockSeat(seatNumber string, userID string) (bool, error) {
+
+	ctx := context.Background()
+
+	key := "seat_lock:" + seatNumber
+
+	ok, err := redis.Client.SetNX(
+		ctx,
+		key,
+		userID,
+		5*time.Minute,
+	).Result()
+
+	return ok, err
 }

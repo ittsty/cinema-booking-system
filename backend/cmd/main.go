@@ -20,5 +20,6 @@ func main() {
 		})
 	})
 	router.GET("/showtimes/:id/seats", seat.GetSeatMap)
+	router.POST("/seats/:seat_number/lock", seat.LockSeatHandler)
 	router.Run(":8080")
 }
