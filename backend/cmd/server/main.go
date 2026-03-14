@@ -14,10 +14,10 @@ func main() {
 	mongo.Connect()
 	redis.Connect()
 
-	router := gin.Default()
 	hub := ws.NewHub()
 	go hub.Run()
 
+	router := gin.Default()
 	router.GET("/ws", func(c *gin.Context) {
 		ws.ServeWS(hub, c)
 	})
@@ -28,7 +28,9 @@ func main() {
 	})
 	router.GET("/showtimes/:id/seats", seat.GetSeatMap)
 	router.POST("/seats/:seatNumber/lock", seat.LockSeatHandler(hub))
+
 	router.POST("/booking", booking.CreateBookingHandler)
-	router.POST("/booking/:seat_number/confirm", booking.ConfirmBookingHandler)
+	router.POST("/booking/:seat_number/confirm", booking.ConfirmBookingHandler(hub))
+
 	router.Run(":8080")
 }

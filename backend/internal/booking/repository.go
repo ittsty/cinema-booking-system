@@ -6,6 +6,8 @@ import (
 
 	"cinema-booking/internal/models"
 	"cinema-booking/pkg/mongo"
+
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func CreateBooking(booking models.Booking) error {
@@ -16,11 +18,10 @@ func CreateBooking(booking models.Booking) error {
 	collection := mongo.DB.Collection("bookings")
 
 	_, err := collection.InsertOne(ctx, booking)
-
 	return err
 }
 
-func ConfirmBooking(seatNumber string) error {
+func ConfirmBooking(seatNumber string, showtimeID string) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -29,12 +30,15 @@ func ConfirmBooking(seatNumber string) error {
 
 	_, err := collection.UpdateOne(
 		ctx,
-		map[string]string{
+		bson.M{
 			"seat_number": seatNumber,
+			"showtime_id": showtimeID,
+			"status":      models.PENDING,
 		},
-		map[string]interface{}{
-			"$set": map[string]string{
-				"status": "BOOKED",
+		bson.M{
+			"$set": bson.M{
+				"status":     models.BOOKED,
+				"updated_at": time.Now(),
 			},
 		},
 	)

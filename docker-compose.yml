@@ -1,6 +1,23 @@
 version: "3.8"
 
 services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongo
+      - redis
+      - rabbitmq
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: cinema
+      REDIS_ADDR: redis:6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    restart: unless-stopped
 
   mongo:
     image: mongo
@@ -10,7 +27,7 @@ services:
     environment:
       MONGO_INITDB_DATABASE: cinema
     volumes:
-    - ./mongo-init:/docker-entrypoint-initdb.d
+      - ./mongo-init:/docker-entrypoint-initdb.d
 
   redis:
     image: redis
