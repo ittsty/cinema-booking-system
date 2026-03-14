@@ -2,9 +2,11 @@ package seat
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"cinema-booking/internal/models"
+	"cinema-booking/internal/ws"
 	"cinema-booking/pkg/mongo"
 	"cinema-booking/pkg/redis"
 )
@@ -30,7 +32,7 @@ func GetSeats(showtimeID string) ([]models.Seat, error) {
 	return seats, err
 }
 
-func LockSeat(seatNumber string, userID string) (bool, error) {
+func LockSeat(seatNumber string, userID string, hub *ws.Hub) (bool, error) {
 
 	ctx := context.Background()
 
@@ -42,6 +44,14 @@ func LockSeat(seatNumber string, userID string) (bool, error) {
 		userID,
 		5*time.Minute,
 	).Result()
+	if ok {
 
+		msg := fmt.Sprintf(`{
+ 		 "event":"seat_locked",
+  		 "seat":"%s"
+ 		}`, seatNumber)
+
+		hub.Broadcast <- []byte(msg)
+	}
 	return ok, err
 }
