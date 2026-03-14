@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cinema-booking/internal/booking"
 	"cinema-booking/internal/seat"
 	"cinema-booking/pkg/mongo"
 	"cinema-booking/pkg/redis"
@@ -21,5 +22,7 @@ func main() {
 	})
 	router.GET("/showtimes/:id/seats", seat.GetSeatMap)
 	router.POST("/seats/:seat_number/lock", seat.LockSeatHandler)
+	router.POST("/booking", booking.CreateBookingHandler)
+	router.POST("/booking/:seat_number/confirm", booking.ConfirmBookingHandler)
 	router.Run(":8080")
 }
