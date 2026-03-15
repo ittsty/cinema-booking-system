@@ -3,11 +3,13 @@ package main
 import (
 	"cinema-booking/internal/admin"
 	"cinema-booking/internal/audit"
+	"cinema-booking/internal/auth"
 	"cinema-booking/internal/booking"
 	"cinema-booking/internal/mq"
 	"cinema-booking/internal/seat"
 	"cinema-booking/internal/ws"
 	"cinema-booking/pkg/config"
+	"cinema-booking/pkg/firebase"
 	middleware "cinema-booking/pkg/middlewares"
 	"cinema-booking/pkg/mongo"
 	"cinema-booking/pkg/redis"
@@ -17,6 +19,7 @@ import (
 
 func main() {
 	config.Load()
+	firebase.Init()
 
 	mongo.Connect()
 	redis.Connect()
@@ -39,14 +42,21 @@ func main() {
 		})
 	})
 	router.GET("/showtimes/:id/seats", seat.GetSeatMap)
-	router.POST("/seats/:seatNumber/lock", seat.LockSeatHandler(hub))
-	router.POST("/seats/:seatNumber/unlock", seat.UnlockSeatHandler(hub))
 
-	router.POST("/booking", booking.CreateBookingHandler)
-	router.POST("/booking/:seat_number/confirm", booking.ConfirmBookingHandler(hub))
+	authGroup := router.Group("/")
+	authGroup.Use(middleware.AuthRequired())
+	{
+		authGroup.GET("/me", auth.MeHandler)
+
+		authGroup.POST("/seats/:seatNumber/lock", seat.LockSeatHandler(hub))
+		authGroup.POST("/seats/:seatNumber/unlock", seat.UnlockSeatHandler(hub))
+
+		authGroup.POST("/booking", booking.CreateBookingHandler)
+		authGroup.POST("/booking/:seat_number/confirm", booking.ConfirmBookingHandler(hub))
+	}
 
 	adminGroup := router.Group("/admin")
-	adminGroup.Use(middleware.AdminOnly())
+	adminGroup.Use(middleware.AuthRequired(), middleware.AdminOnly())
 	{
 		adminGroup.GET("/bookings", admin.GetBookingsHandler)
 		adminGroup.GET("/logs", audit.GetLogsHandler)

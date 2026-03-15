@@ -82,3 +82,5 @@ coverage/
 # ========================
 tmp/
 temp/
+
+firebase-service-account.json

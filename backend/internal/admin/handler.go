@@ -8,7 +8,7 @@ import (
 
 func GetBookingsHandler(c *gin.Context) {
 	filter := BookingFilter{
-		UserID:     c.Query("user_id"),
+		UserID:     c.GetString("user_id"),
 		ShowtimeID: c.Query("showtime_id"),
 		Status:     c.Query("status"),
 	}

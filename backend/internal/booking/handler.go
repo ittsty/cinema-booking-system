@@ -15,21 +15,20 @@ import (
 )
 
 type BookingRequest struct {
-	UserID     string `json:"user_id"`
 	SeatNumber string `json:"seat_number"`
 	ShowtimeID string `json:"showtime_id"`
 }
 
 type ConfirmBookingRequest struct {
 	ShowtimeID string `json:"showtime_id"`
-	UserID     string `json:"user_id"`
 }
 
 func CreateBookingHandler(c *gin.Context) {
 	var req BookingRequest
 
+	userID := c.GetString("user_id")
 	if err := c.ShouldBindJSON(&req); err != nil {
-		_ = audit.LogEvent("SYSTEM_ERROR", req.UserID, req.SeatNumber, req.ShowtimeID, err.Error())
+		_ = audit.LogEvent("SYSTEM_ERROR", userID, req.SeatNumber, req.ShowtimeID, err.Error())
 
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
@@ -37,16 +36,23 @@ func CreateBookingHandler(c *gin.Context) {
 		return
 	}
 
-	if req.UserID == "" || req.SeatNumber == "" || req.ShowtimeID == "" {
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "unauthorized",
+		})
+		return
+	}
+
+	if req.SeatNumber == "" || req.ShowtimeID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "user_id, seat_number and showtime_id are required",
+			"error": "seat_number and showtime_id are required",
 		})
 		return
 	}
 
 	seatData, err := seat.GetSeatByShowtimeAndNumber(req.ShowtimeID, req.SeatNumber)
 	if err != nil {
-		_ = audit.LogEvent("SYSTEM_ERROR", req.UserID, req.SeatNumber, req.ShowtimeID, err.Error())
+		_ = audit.LogEvent("SYSTEM_ERROR", userID, req.SeatNumber, req.ShowtimeID, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
@@ -59,8 +65,25 @@ func CreateBookingHandler(c *gin.Context) {
 		})
 		return
 	}
+
+	key := "seat_lock:" + req.ShowtimeID + ":" + req.SeatNumber
+	lockedBy, err := redisClient.Client.Get(c.Request.Context(), key).Result()
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{
+			"message": "seat is not locked",
+		})
+		return
+	}
+
+	if lockedBy != userID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"message": "you do not own this seat lock",
+		})
+		return
+	}
+
 	booking := models.Booking{
-		UserID:     req.UserID,
+		UserID:     userID,
 		SeatNumber: req.SeatNumber,
 		ShowtimeID: req.ShowtimeID,
 		Status:     models.PENDING,
@@ -69,7 +92,7 @@ func CreateBookingHandler(c *gin.Context) {
 	}
 	exists, err := HasPendingBooking(req.SeatNumber, req.ShowtimeID)
 	if err != nil {
-		_ = audit.LogEvent("SYSTEM_ERROR", req.UserID, req.SeatNumber, req.ShowtimeID, err.Error())
+		_ = audit.LogEvent("SYSTEM_ERROR", userID, req.SeatNumber, req.ShowtimeID, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
@@ -83,13 +106,13 @@ func CreateBookingHandler(c *gin.Context) {
 		return
 	}
 	if err := CreateBooking(booking); err != nil {
-		_ = audit.LogEvent("SYSTEM_ERROR", req.UserID, req.SeatNumber, req.ShowtimeID, err.Error())
+		_ = audit.LogEvent("SYSTEM_ERROR", userID, req.SeatNumber, req.ShowtimeID, err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
-	_ = audit.LogEvent("BOOKING_CREATED", req.UserID, req.SeatNumber, req.ShowtimeID, "booking created successfully")
+	_ = audit.LogEvent("BOOKING_CREATED", userID, req.SeatNumber, req.ShowtimeID, "booking created successfully")
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "booking created",
@@ -100,10 +123,10 @@ func CreateBookingHandler(c *gin.Context) {
 func ConfirmBookingHandler(hub *ws.Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		seatNumber := c.Param("seat_number")
-
+		userID := c.GetString("user_id")
 		var req ConfirmBookingRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			_ = audit.LogEvent("SYSTEM_ERROR", "", seatNumber, req.ShowtimeID, err.Error())
+			_ = audit.LogEvent("SYSTEM_ERROR", userID, seatNumber, req.ShowtimeID, err.Error())
 
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -111,16 +134,37 @@ func ConfirmBookingHandler(hub *ws.Hub) gin.HandlerFunc {
 			return
 		}
 
-		if req.UserID == "" || req.ShowtimeID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "user_id and showtime_id are required",
+		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "unauthorized",
 			})
 			return
 		}
 
+		if req.ShowtimeID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "showtime_id is required",
+			})
+			return
+		}
+		key := "seat_lock:" + req.ShowtimeID + ":" + seatNumber
+		lockedBy, err := redisClient.Client.Get(c.Request.Context(), key).Result()
+		if err != nil {
+			c.JSON(http.StatusConflict, gin.H{
+				"message": "seat is not locked",
+			})
+			return
+		}
+
+		if lockedBy != userID {
+			c.JSON(http.StatusForbidden, gin.H{
+				"message": "you do not own this seat lock",
+			})
+			return
+		}
 		updated, err := seat.UpdateSeatStatusIfCurrent(req.ShowtimeID, seatNumber, "LOCKED", "BOOKED")
 		if err != nil {
-			_ = audit.LogEvent("SYSTEM_ERROR", req.UserID, seatNumber, req.ShowtimeID, err.Error())
+			_ = audit.LogEvent("SYSTEM_ERROR", userID, seatNumber, req.ShowtimeID, err.Error())
 
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
@@ -138,7 +182,7 @@ func ConfirmBookingHandler(hub *ws.Hub) gin.HandlerFunc {
 		ok, err := ConfirmBooking(seatNumber, req.ShowtimeID)
 		if err != nil {
 			_, _ = seat.UpdateSeatStatusIfCurrent(req.ShowtimeID, seatNumber, "BOOKED", "LOCKED")
-			_ = audit.LogEvent("SYSTEM_ERROR", req.UserID, seatNumber, req.ShowtimeID, err.Error())
+			_ = audit.LogEvent("SYSTEM_ERROR", userID, seatNumber, req.ShowtimeID, err.Error())
 
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
@@ -155,7 +199,6 @@ func ConfirmBookingHandler(hub *ws.Hub) gin.HandlerFunc {
 			return
 		}
 
-		key := "seat_lock:" + req.ShowtimeID + ":" + seatNumber
 		_ = redisClient.Client.Del(c.Request.Context(), key).Err()
 
 		_ = ws.BroadcastSeatEvent(hub, ws.SeatEvent{
@@ -163,13 +206,13 @@ func ConfirmBookingHandler(hub *ws.Hub) gin.HandlerFunc {
 			ShowtimeID: req.ShowtimeID,
 			SeatNumber: seatNumber,
 			Status:     "BOOKED",
-			UserID:     req.UserID,
+			UserID:     userID,
 		})
 
-		_ = audit.LogEvent("BOOKING_SUCCESS", req.UserID, seatNumber, req.ShowtimeID, "booking confirmed successfully")
+		_ = audit.LogEvent("BOOKING_SUCCESS", userID, seatNumber, req.ShowtimeID, "booking confirmed successfully")
 
 		event := mq.BookingSuccessEvent{
-			UserID:     req.UserID,
+			UserID:     userID,
 			SeatNumber: seatNumber,
 			ShowtimeID: req.ShowtimeID,
 			Status:     "BOOKED",
@@ -177,7 +220,7 @@ func ConfirmBookingHandler(hub *ws.Hub) gin.HandlerFunc {
 		}
 
 		if err := mq.PublishBookingSuccess(event); err != nil {
-			_ = audit.LogEvent("SYSTEM_ERROR", req.UserID, seatNumber, req.ShowtimeID, err.Error())
+			_ = audit.LogEvent("SYSTEM_ERROR", userID, seatNumber, req.ShowtimeID, err.Error())
 		}
 
 		c.JSON(http.StatusOK, gin.H{

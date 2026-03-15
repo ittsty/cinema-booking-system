@@ -5,6 +5,7 @@ import (
 
 	"cinema-booking/internal/audit"
 	"cinema-booking/internal/ws"
+	redisClient "cinema-booking/pkg/redis"
 
 	"github.com/gin-gonic/gin"
 )
@@ -25,11 +26,24 @@ func GetSeatMap(c *gin.Context) {
 }
 
 func LockSeatHandler(hub *ws.Hub) gin.HandlerFunc {
-
 	return func(c *gin.Context) {
 		seatNumber := c.Param("seatNumber")
-		userID := c.Query("user_id")
+		userID := c.GetString("user_id")
 		showtimeID := c.Query("showtime_id")
+
+		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "unauthorized",
+			})
+			return
+		}
+
+		if showtimeID == "" || seatNumber == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "showtime_id and seatNumber are required",
+			})
+			return
+		}
 
 		ok, err := LockSeat(showtimeID, seatNumber, userID)
 		if err != nil {
@@ -49,8 +63,22 @@ func LockSeatHandler(hub *ws.Hub) gin.HandlerFunc {
 			})
 			return
 		}
-		if showtimeID != "" {
-			_, _ = UpdateSeatStatusIfCurrent(showtimeID, seatNumber, "AVAILABLE", "LOCKED")
+		updated, err := UpdateSeatStatusIfCurrent(showtimeID, seatNumber, "AVAILABLE", "LOCKED")
+		if err != nil {
+			_ = UnlockSeat(showtimeID, seatNumber)
+			_ = audit.LogEvent("SYSTEM_ERROR", userID, seatNumber, showtimeID, err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		if !updated {
+			_ = UnlockSeat(showtimeID, seatNumber)
+			c.JSON(http.StatusConflict, gin.H{
+				"message": "seat is not in AVAILABLE state",
+			})
+			return
 		}
 		_ = ws.BroadcastSeatEvent(hub, ws.SeatEvent{
 			Event:      "seat_updated",
@@ -71,11 +99,34 @@ func UnlockSeatHandler(hub *ws.Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		seatNumber := c.Param("seatNumber")
 		showtimeID := c.Query("showtime_id")
-		userID := c.Query("user_id")
+		userID := c.GetString("user_id")
 
-		if showtimeID == "" || userID == "" {
+		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "unauthorized",
+			})
+			return
+		}
+
+		if showtimeID == "" || seatNumber == "" {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "showtime_id or userID is required",
+				"error": "showtime_id and seatNumber are required",
+			})
+			return
+		}
+
+		key := "seat_lock:" + showtimeID + ":" + seatNumber
+		lockedBy, err := redisClient.Client.Get(c.Request.Context(), key).Result()
+		if err != nil {
+			c.JSON(http.StatusConflict, gin.H{
+				"message": "seat is not locked",
+			})
+			return
+		}
+
+		if lockedBy != userID {
+			c.JSON(http.StatusForbidden, gin.H{
+				"message": "you do not own this seat lock",
 			})
 			return
 		}
