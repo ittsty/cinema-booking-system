@@ -14,6 +14,7 @@ import (
 	"cinema-booking/pkg/mongo"
 	"cinema-booking/pkg/redis"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -32,6 +33,12 @@ func main() {
 	mq.StartBookingSuccessConsumer()
 
 	router := gin.Default()
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
 
 	router.GET("/ws", func(c *gin.Context) {
 		ws.ServeWS(hub, c)
@@ -41,6 +48,7 @@ func main() {
 			"status": "ok",
 		})
 	})
+	router.GET("/showtimes", seat.GetShowtimesHandler)
 	router.GET("/showtimes/:id/seats", seat.GetSeatMap)
 
 	authGroup := router.Group("/")

@@ -8,33 +8,39 @@ db.audit_logs.deleteMany({})
 
 // Movies
 const movie1 = {
-  _id: ObjectId(),
+  _id: "m1",
   title: "Avengers"
 }
 
 const movie2 = {
-  _id: ObjectId(),
+  _id: "m2",
   title: "Interstellar"
 }
 
 db.movies.insertMany([movie1, movie2])
 
 // Showtimes
+const now = new Date()
+
 const showtime1 = {
   _id: "1",
   movie_id: movie1._id,
-  start_time: new Date()
+  movie_title: movie1.title,
+  start_time: new Date(now.getTime() + 60 * 60 * 1000),
+  theater: "Theater 1"
 }
 
 const showtime2 = {
   _id: "2",
   movie_id: movie2._id,
-  start_time: new Date()
+  movie_title: movie2.title,
+  start_time: new Date(now.getTime() + 3 * 60 * 60 * 1000),
+  theater: "Theater 2"
 }
+
 
 db.showtimes.insertMany([showtime1, showtime2])
 
-// Seat layout
 const rows = ["A","B","C","D","E"]
 
 function generateSeats(showtimeId) {
@@ -55,13 +61,11 @@ function generateSeats(showtimeId) {
   return seats
 }
 
-// Insert seats
 db.seats.insertMany([
   ...generateSeats(showtime1._id),
   ...generateSeats(showtime2._id)
 ])
 
-// Index กันจองซ้ำ
 db.seats.createIndex(
   { showtime_id: 1, seat_number: 1 },
   { unique: true }
