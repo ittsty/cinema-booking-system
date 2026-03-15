@@ -1,26 +1,37 @@
 package main
 
 import (
+	"cinema-booking/internal/admin"
 	"cinema-booking/internal/audit"
 	"cinema-booking/internal/booking"
+	"cinema-booking/internal/mq"
 	"cinema-booking/internal/seat"
 	"cinema-booking/internal/ws"
+	middleware "cinema-booking/pkg/middlewares"
 	"cinema-booking/pkg/mongo"
 	"cinema-booking/pkg/redis"
+	"log"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	if err := godotenv.Load(); err != nil {
+		log.Println(".env file not found, using system env")
+	}
 	mongo.Connect()
 	redis.Connect()
+	mq.Connect()
 
 	hub := ws.NewHub()
 	go hub.Run()
 
 	booking.StartTimeoutWorker(hub)
+	mq.StartBookingSuccessConsumer()
 
 	router := gin.Default()
+
 	router.GET("/ws", func(c *gin.Context) {
 		ws.ServeWS(hub, c)
 	})
@@ -35,6 +46,11 @@ func main() {
 	router.POST("/booking", booking.CreateBookingHandler)
 	router.POST("/booking/:seat_number/confirm", booking.ConfirmBookingHandler(hub))
 
-	router.GET("/admin/logs", audit.GetLogsHandler)
+	adminGroup := router.Group("/admin")
+	adminGroup.Use(middleware.AdminOnly())
+	{
+		adminGroup.GET("/bookings", admin.GetBookingsHandler)
+		adminGroup.GET("/logs", audit.GetLogsHandler)
+	}
 	router.Run(":8080")
 }

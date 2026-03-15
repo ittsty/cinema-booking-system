@@ -7,6 +7,7 @@ import (
 
 	"cinema-booking/internal/audit"
 	"cinema-booking/internal/models"
+	"cinema-booking/internal/mq"
 	"cinema-booking/internal/seat"
 	"cinema-booking/internal/ws"
 	redisClient "cinema-booking/pkg/redis"
@@ -22,6 +23,7 @@ type BookingRequest struct {
 
 type ConfirmBookingRequest struct {
 	ShowtimeID string `json:"showtime_id"`
+	UserID     string `json:"user_id"`
 }
 
 func CreateBookingHandler(c *gin.Context) {
@@ -104,6 +106,18 @@ func ConfirmBookingHandler(hub *ws.Hub) gin.HandlerFunc {
 		hub.Broadcast <- []byte(msg)
 
 		_ = audit.LogEvent("BOOKING_SUCCESS", "", seatNumber, req.ShowtimeID, "booking confirmed successfully")
+
+		event := mq.BookingSuccessEvent{
+			UserID:     req.UserID,
+			SeatNumber: seatNumber,
+			ShowtimeID: req.ShowtimeID,
+			Status:     "BOOKED",
+			CreatedAt:  time.Now(),
+		}
+
+		if err := mq.PublishBookingSuccess(event); err != nil {
+			_ = audit.LogEvent("SYSTEM_ERROR", req.UserID, seatNumber, req.ShowtimeID, err.Error())
+		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"message": "booking confirmed",
