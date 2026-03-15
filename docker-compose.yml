@@ -5,7 +5,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: backend
+    container_name: cinema-backend
     ports:
       - "8080:8080"
     depends_on:
@@ -16,6 +16,18 @@ services:
       - ./.env.docker
     restart: unless-stopped
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cinema-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    env_file:
+      - ./frontend/.env
   mongo:
     image: mongo
     container_name: mongo
