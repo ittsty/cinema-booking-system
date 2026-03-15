@@ -84,3 +84,4 @@ tmp/
 temp/
 
 firebase-service-account.json
+.vscode
