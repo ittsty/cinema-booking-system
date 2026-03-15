@@ -2,7 +2,6 @@ package booking
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -30,27 +29,40 @@ func processExpiredBookings(hub *ws.Hub) {
 	}
 
 	for _, b := range bookings {
-		if err := ExpireBooking(b.SeatNumber, b.ShowtimeID); err != nil {
+		expired, err := ExpireBooking(b.SeatNumber, b.ShowtimeID)
+		if err != nil {
 			log.Println("expire booking error:", err)
 			_ = audit.LogEvent("SYSTEM_ERROR", b.UserID, b.SeatNumber, b.ShowtimeID, err.Error())
 			continue
 		}
 
-		key := "seat_lock:" + b.SeatNumber
+		if !expired {
+			log.Println("booking was not expired because it is no longer in PENDING state:", b.SeatNumber)
+			continue
+		}
+
+		key := "seat_lock:" + b.ShowtimeID + ":" + b.SeatNumber
 		_ = redisClient.Client.Del(context.Background(), key).Err()
 
-		if err := seat.UpdateSeatStatus(b.ShowtimeID, b.SeatNumber, "AVAILABLE"); err != nil {
+		updated, err := seat.UpdateSeatStatusIfCurrent(b.ShowtimeID, b.SeatNumber, "LOCKED", "AVAILABLE")
+		if err != nil {
 			log.Println("update seat available error:", err)
 			_ = audit.LogEvent("SYSTEM_ERROR", b.UserID, b.SeatNumber, b.ShowtimeID, err.Error())
 			continue
 		}
 
-		msg := fmt.Sprintf(`{
-			"event":"seat_released",
-			"seat":"%s"
-		}`, b.SeatNumber)
+		if !updated {
+			log.Println("seat was not updated because current status was not LOCKED:", b.SeatNumber)
+			continue
+		}
 
-		hub.Broadcast <- []byte(msg)
+		_ = ws.BroadcastSeatEvent(hub, ws.SeatEvent{
+			Event:      "seat_updated",
+			ShowtimeID: b.ShowtimeID,
+			SeatNumber: b.SeatNumber,
+			Status:     "AVAILABLE",
+			UserID:     b.UserID,
+		})
 
 		_ = audit.LogEvent("BOOKING_TIMEOUT", b.UserID, b.SeatNumber, b.ShowtimeID, "booking expired and seat released")
 	}

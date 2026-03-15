@@ -17,18 +17,22 @@ func CreateBooking(booking models.Booking) error {
 
 	collection := mongo.DB.Collection("bookings")
 
+	now := time.Now()
+	booking.CreatedAt = now
+	booking.UpdatedAt = now
+
 	_, err := collection.InsertOne(ctx, booking)
 	return err
 }
 
-func ConfirmBooking(seatNumber string, showtimeID string) error {
+func ConfirmBooking(seatNumber string, showtimeID string) (bool, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	collection := mongo.DB.Collection("bookings")
 
-	_, err := collection.UpdateOne(
+	result, err := collection.UpdateOne(
 		ctx,
 		bson.M{
 			"seat_number": seatNumber,
@@ -42,8 +46,10 @@ func ConfirmBooking(seatNumber string, showtimeID string) error {
 			},
 		},
 	)
-
-	return err
+	if err != nil {
+		return false, err
+	}
+	return result.ModifiedCount == 1, nil
 }
 
 func FindExpiredPendingBookings(timeout time.Duration) ([]models.Booking, error) {
@@ -72,13 +78,13 @@ func FindExpiredPendingBookings(timeout time.Duration) ([]models.Booking, error)
 	return bookings, nil
 }
 
-func ExpireBooking(seatNumber string, showtimeID string) error {
+func ExpireBooking(seatNumber string, showtimeID string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	collection := mongo.DB.Collection("bookings")
 
-	_, err := collection.UpdateOne(
+	result, err := collection.UpdateOne(
 		ctx,
 		bson.M{
 			"seat_number": seatNumber,
@@ -92,6 +98,27 @@ func ExpireBooking(seatNumber string, showtimeID string) error {
 			},
 		},
 	)
+	if err != nil {
+		return false, err
+	}
 
-	return err
+	return result.ModifiedCount == 1, nil
+}
+
+func HasPendingBooking(seatNumber string, showtimeID string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	collection := mongo.DB.Collection("bookings")
+
+	count, err := collection.CountDocuments(ctx, bson.M{
+		"seat_number": seatNumber,
+		"showtime_id": showtimeID,
+		"status":      models.PENDING,
+	})
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }

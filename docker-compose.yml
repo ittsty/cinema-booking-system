@@ -12,11 +12,8 @@ services:
       - mongo
       - redis
       - rabbitmq
-    environment:
-      MONGO_URI: mongodb://mongo:27017
-      MONGO_DB: cinema
-      REDIS_ADDR: redis:6379
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    env_file:
+      - ./.env.docker
     restart: unless-stopped
 
   mongo:

@@ -3,6 +3,8 @@ db = db.getSiblingDB("cinema")
 db.movies.deleteMany({})
 db.showtimes.deleteMany({})
 db.seats.deleteMany({})
+db.bookings.deleteMany({})
+db.audit_logs.deleteMany({})
 
 // Movies
 const movie1 = {

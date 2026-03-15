@@ -40,6 +40,7 @@ func main() {
 	})
 	router.GET("/showtimes/:id/seats", seat.GetSeatMap)
 	router.POST("/seats/:seatNumber/lock", seat.LockSeatHandler(hub))
+	router.POST("/seats/:seatNumber/unlock", seat.UnlockSeatHandler(hub))
 
 	router.POST("/booking", booking.CreateBookingHandler)
 	router.POST("/booking/:seat_number/confirm", booking.ConfirmBookingHandler(hub))
