@@ -2,7 +2,8 @@ package mq
 
 import (
 	"log"
-	"os"
+
+	"cinema-booking/pkg/config"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -13,13 +14,9 @@ var Channel *amqp.Channel
 const QueueName = "booking.success"
 
 func Connect() {
-	url := os.Getenv("RABBITMQ_URL")
-	if url == "" {
-		url = "amqp://guest:guest@rabbitmq:5672/"
-	}
-
 	var err error
-	Conn, err = amqp.Dial(url)
+
+	Conn, err = amqp.Dial(config.App.RabbitMQURL)
 	if err != nil {
 		log.Fatal("failed to connect rabbitmq:", err)
 	}
@@ -40,4 +37,6 @@ func Connect() {
 	if err != nil {
 		log.Fatal("failed to declare queue:", err)
 	}
+
+	log.Println("RabbitMQ connected")
 }

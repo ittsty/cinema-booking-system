@@ -7,19 +7,17 @@ import (
 	"cinema-booking/internal/mq"
 	"cinema-booking/internal/seat"
 	"cinema-booking/internal/ws"
+	"cinema-booking/pkg/config"
 	middleware "cinema-booking/pkg/middlewares"
 	"cinema-booking/pkg/mongo"
 	"cinema-booking/pkg/redis"
-	"log"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Println(".env file not found, using system env")
-	}
+	config.Load()
+
 	mongo.Connect()
 	redis.Connect()
 	mq.Connect()
@@ -52,5 +50,5 @@ func main() {
 		adminGroup.GET("/bookings", admin.GetBookingsHandler)
 		adminGroup.GET("/logs", audit.GetLogsHandler)
 	}
-	router.Run(":8080")
+	router.Run(":" + config.App.Port)
 }
