@@ -12,11 +12,7 @@
 ```bash
 docker compose up --build
 ```
-```
-Test Admin Role Email cerdinal
-email : admin@example.com
-password : 12345678
-```
+
 ## Key Features
 
 ### User Side
